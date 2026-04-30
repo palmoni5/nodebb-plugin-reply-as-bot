@@ -1,0 +1,24 @@
+{
+	"id": "nodebb-plugin-reply-as-bot",
+	"name": "Reply As Bot",
+	"description": "Allows authorized groups to reply as a configured bot user.",
+	"url": "https://github.com/palmoni5/nodebb-plugin-reply-as-bot",
+	"library": "./library.js",
+	"hooks": [
+		{ "hook": "static:app.load", "method": "init" },
+		{ "hook": "filter:admin.header.build", "method": "addAdminNavigation" },
+		{ "hook": "filter:topic.reply", "method": "filterTopicReply" },
+		{ "hook": "filter:post.create", "method": "markBotReplyPost" },
+		{ "hook": "action:post.save", "method": "logBotReply" }
+	],
+	"scripts": [
+		"./static/lib/client.js"
+	],
+	"modules": {
+		"../admin/plugins/reply-as-bot.js": "./static/lib/admin.js"
+	},
+	"scss": [
+		"./static/scss/client.scss"
+	],
+	"templates": "static/templates"
+}

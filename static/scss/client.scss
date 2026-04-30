@@ -1,0 +1,7 @@
+.reply-as-bot-composer {
+	border-top: 3px solid var(--bs-warning);
+}
+
+.reply-as-bot-composer [component="reply-as-bot/banner"] {
+	border-radius: 0.25rem;
+}
