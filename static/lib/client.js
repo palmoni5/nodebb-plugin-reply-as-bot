@@ -128,15 +128,17 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 				return;
 			}
 
-			const botReply = $(`
-				<a component="reply-as-bot/reply" href="#" class="btn btn-ghost btn-sm" title="תגובה בשם ${escapeHtml(state.botUsername)}">
-					<i class="fa fa-fw ${escapeAttr(state.iconClass)} text-warning"></i>
-				</a>
-			`);
-			botReply.attr('data-pid', post.attr('data-pid'));
-			botReply.attr('data-uid', post.attr('data-uid'));
-			botReply.attr('data-userslug', post.attr('data-userslug'));
-			reply.after(botReply);
+			translator.translate(`[[reply-as-bot:client.reply-title, ${escapeHtml(state.botUsername)}]]`, function (title) {
+				const botReply = $(`
+					<a component="reply-as-bot/reply" href="#" class="btn btn-ghost btn-sm" title="${escapeAttr(title)}">
+						<i class="fa fa-fw ${escapeAttr(state.iconClass)} text-warning"></i>
+					</a>
+				`);
+				botReply.attr('data-pid', post.attr('data-pid'));
+				botReply.attr('data-uid', post.attr('data-uid'));
+				botReply.attr('data-userslug', post.attr('data-userslug'));
+				reply.after(botReply);
+			});
 		});
 	}
 
@@ -145,25 +147,25 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			return;
 		}
 
-		const banner = $(`
-			<div component="reply-as-bot/banner" class="alert alert-warning py-2 mx-2 mb-1">
-				<strong>תגובה זו תישלח בשם ${escapeHtml(state.botUsername)}</strong>
-			</div>
-		`);
+		translator.translate(
+			`<div component="reply-as-bot/banner" class="alert alert-warning py-2 mx-2 mb-1"><strong>[[reply-as-bot:client.banner, ${escapeHtml(state.botUsername)}]]</strong></div>`,
+			function (translatedBanner) {
+				postContainer.find('.composer-container').prepend($(translatedBanner));
+			}
+		);
 
-		const menu = $(`
-			<li component="reply-as-bot/templates" class="dropdown bottom-sheet" title="תבניות קבועות">
-				<button type="button" class="btn btn-sm btn-link text-reset dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="תבניות קבועות">
+		translator.translate(`
+			<li component="reply-as-bot/templates" class="dropdown bottom-sheet" title="[[reply-as-bot:templates.title]]">
+				<button type="button" class="btn btn-sm btn-link text-reset dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="[[reply-as-bot:templates.title]]">
 					<i class="fa fa-file-text-o"></i>
-					<span>תבניות קבועות</span>
+					<span>[[reply-as-bot:templates.title]]</span>
 				</button>
 				<ul class="dropdown-menu p-1" role="menu"></ul>
 			</li>
-		`);
-
-		postContainer.find('.composer-container').prepend(banner);
-		postContainer.find('.formatting-bar .formatting-group').append(menu);
-		renderTemplateMenu(postContainer);
+		`, function (translatedMenu) {
+			postContainer.find('.formatting-bar .formatting-group').append($(translatedMenu));
+			renderTemplateMenu(postContainer);
+		});
 	}
 
 	function renderTemplateMenu(postContainer) {
@@ -181,11 +183,13 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			</li>
 		`).join('');
 
-		menu.html(`
-			${items || '<li><span class="dropdown-item-text text-muted">אין תבניות</span></li>'}
+		translator.translate(`
+			${items || '<li><span class="dropdown-item-text text-muted">[[reply-as-bot:templates.none]]</span></li>'}
 			<li><hr class="dropdown-divider"></li>
-			<li><button type="button" class="dropdown-item" data-template-add="1"><i class="fa fa-plus"></i> הוספת טקסט קבוע</button></li>
-		`);
+			<li><button type="button" class="dropdown-item" data-template-add="1"><i class="fa fa-plus"></i> [[reply-as-bot:templates.add]]</button></li>
+		`, function (translated) {
+			menu.html(translated);
+		});
 
 		menu.off('click.replyAsBot').on('click.replyAsBot', '[data-template-id]', function (event) {
 			const target = $(event.target);
@@ -219,14 +223,14 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 	function openTemplateDialog(postContainer, template) {
 		template = template || {};
 		bootbox.dialog({
-			title: template.id ? 'עריכת טקסט קבוע' : 'הוספת טקסט קבוע',
+			title: template.id ? '[[reply-as-bot:templates.edit]]' : '[[reply-as-bot:templates.add]]',
 			message: `
 				<div class="mb-3">
-					<label class="form-label">כותרת</label>
+					<label class="form-label">[[reply-as-bot:templates.template-title]]</label>
 					<input class="form-control" component="reply-as-bot/template-title" value="${escapeAttr(template.title || '')}">
 				</div>
 				<div class="mb-3">
-					<label class="form-label">טקסט</label>
+					<label class="form-label">[[reply-as-bot:templates.template-text]]</label>
 					<textarea class="form-control" rows="6" component="reply-as-bot/template-text">${escapeHtml(template.text || '')}</textarea>
 				</div>
 			`,
@@ -259,7 +263,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 	}
 
 	function deleteTemplate(postContainer, id) {
-		bootbox.confirm('למחוק את הטקסט הקבוע?', function (ok) {
+		bootbox.confirm('[[reply-as-bot:templates.delete-confirm]]', function (ok) {
 			if (!ok) {
 				return;
 			}

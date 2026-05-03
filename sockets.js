@@ -36,13 +36,13 @@ sockets.saveSettings = async function (socket, data) {
 	const iconClass = normalizeIconClass(data && data.iconClass);
 	const botUid = await library.getBotUid(botUsername);
 	if (!botUid) {
-		throw new Error('יש לבחור שם משתמש קיים עבור הבוט.');
+		throw new Error('[[reply-as-bot:error.select-valid-bot-user]]');
 	}
 
 	const exists = await groups.exists(allowedGroups);
 	const validGroups = allowedGroups.filter((groupName, index) => exists[index]);
 	if (!validGroups.length) {
-		throw new Error('יש לבחור לפחות קבוצה מורשית אחת.');
+		throw new Error('[[reply-as-bot:error.select-allowed-group]]');
 	}
 
 	await meta.settings.set('reply-as-bot', {
@@ -64,7 +64,7 @@ sockets.saveTemplate = async function (socket, data) {
 	const title = String(data && data.title || '').trim();
 	const text = String(data && data.text || '').trim();
 	if (!title || !text) {
-		throw new Error('יש למלא כותרת וטקסט לתבנית.');
+		throw new Error('[[reply-as-bot:error.template-title-text-required]]');
 	}
 
 	const id = data && data.id ? String(data.id) : String(await db.incrObjectField('global', 'nextReplyAsBotTemplateId'));
@@ -86,7 +86,7 @@ sockets.deleteTemplate = async function (socket, data) {
 
 	const id = String(data && data.id || '');
 	if (!id) {
-		throw new Error('תבנית לא תקינה.');
+		throw new Error('[[reply-as-bot:error.invalid-template]]');
 	}
 
 	await db.sortedSetRemove(TEMPLATE_SET, id);

@@ -25,7 +25,7 @@ plugin.addAdminNavigation = async function (header) {
 	header.plugins.push({
 		route: '/plugins/reply-as-bot',
 		icon: 'fa-user-secret',
-		name: 'תגובה בשם בוט',
+		name: '[[reply-as-bot:admin.title]]',
 	});
 	return header;
 };
@@ -43,7 +43,7 @@ plugin.filterTopicReply = async function (data) {
 	const settings = await getSettings();
 	const botUid = await getBotUid(settings.botUsername);
 	if (!botUid) {
-		throw new Error('משתמש הבוט לא הוגדר או שאינו קיים.');
+		throw new Error('[[reply-as-bot:error.bot-user-invalid]]');
 	}
 
 	const allowed = await canUse(actorUid, settings.allowedGroups);

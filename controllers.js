@@ -13,7 +13,7 @@ Controllers.renderAdminPage = async function (req, res) {
 	const selected = parseGroups(settings.allowedGroups);
 
 	res.render('admin/plugins/reply-as-bot', {
-		title: 'תגובה בשם בוט',
+		title: '[[reply-as-bot:admin.title]]',
 		botUsername: settings.botUsername || '',
 		iconClass: normalizeIconClass(settings.iconClass),
 		groups: groupData.map(group => ({

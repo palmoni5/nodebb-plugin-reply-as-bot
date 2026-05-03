@@ -1,6 +1,6 @@
 'use strict';
 
-define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect'], function (alerts, autocomplete, iconSelect) {
+define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect', 'translator'], function (alerts, autocomplete, iconSelect, translator) {
 	const ACP = {};
 
 	ACP.init = function () {
@@ -31,7 +31,7 @@ define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect'], f
 				if (err) {
 					return alerts.error(err);
 				}
-				alerts.success('ההגדרות נשמרו.');
+				alerts.success('[[global:saved]]');
 			});
 		});
 	};
@@ -43,7 +43,12 @@ define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect'], f
 			}
 			const container = $('[component="reply-as-bot/admin/templates"]');
 			const templates = state.templates || [];
-			container.html(templates.length ? templates.map(renderTemplate).join('') : '<p class="text-muted mb-0">עדיין אין תבניות.</p>');
+			translator.translate(
+				templates.length ? templates.map(renderTemplate).join('') : '<p class="text-muted mb-0">[[reply-as-bot:templates.none-yet]]</p>',
+				function (translated) {
+					container.html(translated);
+				}
+			);
 		});
 	}
 

@@ -4,6 +4,7 @@
 	"description": "Allows authorized groups to reply as a configured bot user.",
 	"url": "https://github.com/palmoni5/nodebb-plugin-reply-as-bot",
 	"library": "./library.js",
+	"languages": "./languages",
 	"hooks": [
 		{ "hook": "static:app.load", "method": "init" },
 		{ "hook": "filter:admin.header.build", "method": "addAdminNavigation" },
