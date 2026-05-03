@@ -5,7 +5,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 		loaded: false,
 		canUse: false,
 		botUsername: '',
-		iconClass: 'fa-user-secret',
+		iconClass: 'fa-robot',
 		templates: [],
 		pending: null,
 	};
@@ -106,7 +106,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			state.loaded = true;
 			state.canUse = !!data.canUse;
 			state.botUsername = data.botUsername || '';
-			state.iconClass = data.iconClass || 'fa-user-secret';
+			state.iconClass = data.iconClass || 'fa-robot';
 			state.templates = data.templates || [];
 			callback();
 		});
@@ -119,7 +119,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 
 		$('[component="post"]').each(function () {
 			const post = $(this);
-			if (post.find('[component="reply-as-bot/reply"]').length) {
+			if (post.attr('data-reply-as-bot-ready') === '1') {
 				return;
 			}
 
@@ -128,10 +128,11 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 				return;
 			}
 
+			post.attr('data-reply-as-bot-ready', '1');
 			translator.translate(`[[reply-as-bot:client.reply-title, ${escapeHtml(state.botUsername)}]]`, function (title) {
 				const botReply = $(`
 					<a component="reply-as-bot/reply" href="#" class="btn btn-ghost btn-sm" title="${escapeAttr(title)}">
-						<i class="fa fa-fw ${escapeAttr(state.iconClass)} text-warning"></i>
+						<i class="fa fa-fw ${escapeAttr(state.iconClass)}"></i>
 					</a>
 				`);
 				botReply.attr('data-pid', post.attr('data-pid'));
@@ -143,10 +144,11 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 	}
 
 	function addComposerControls(postContainer) {
-		if (postContainer.find('[component="reply-as-bot/banner"]').length) {
+		if (postContainer.attr('data-reply-as-bot-composer-ready') === '1') {
 			return;
 		}
 
+		postContainer.attr('data-reply-as-bot-composer-ready', '1');
 		translator.translate(
 			`<div component="reply-as-bot/banner" class="alert alert-warning py-2 mx-2 mb-1"><strong>[[reply-as-bot:client.banner, ${escapeHtml(state.botUsername)}]]</strong></div>`,
 			function (translatedBanner) {
@@ -156,7 +158,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 
 		translator.translate(`
 			<li component="reply-as-bot/templates" class="dropdown bottom-sheet" title="[[reply-as-bot:templates.title]]">
-				<button type="button" class="btn btn-sm btn-link text-reset dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="[[reply-as-bot:templates.title]]">
+				<button type="button" class="btn btn-sm btn-link dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-label="[[reply-as-bot:templates.title]]">
 					<i class="fa fa-file-text-o"></i>
 					<span>[[reply-as-bot:templates.title]]</span>
 				</button>

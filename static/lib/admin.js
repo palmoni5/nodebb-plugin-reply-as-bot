@@ -15,7 +15,7 @@ define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect', 't
 			iconSelect.init(icon, function () {
 				let iconClass = icon.attr('value');
 				if (iconClass === 'fa-nbb-none') {
-					iconClass = 'fa-user-secret';
+					iconClass = 'fa-robot';
 					icon.attr('value', iconClass).attr('class', `fa fa-2x ${iconClass}`);
 				}
 				form.find('[name="iconClass"]').val(iconClass);

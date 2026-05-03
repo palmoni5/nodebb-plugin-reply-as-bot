@@ -40,7 +40,7 @@ function normalizeIconClass(iconClass) {
 		!/^(fa-[a-z0-9-]+)(\s+(fa|fas|far|fab|fa-solid|fa-regular|fa-brands))*$/i.test(iconClass) ||
 		iconClass.includes('fa-nbb-none')
 	) {
-		return 'fa-user-secret';
+		return 'fa-robot';
 	}
 	return iconClass;
 }
