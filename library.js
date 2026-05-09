@@ -95,6 +95,12 @@ async function getSettings() {
 		botUsername: String(settings.botUsername || '').trim(),
 		allowedGroups: parseGroups(settings.allowedGroups),
 		iconClass: normalizeIconClass(settings.iconClass),
+		aiEnabled: String(settings.aiEnabled) === 'true' || settings.aiEnabled === true || settings.aiEnabled === 'on',
+		aiProvider: normalizeProvider(settings.aiProvider),
+		aiModel: String(settings.aiModel || '').trim(),
+		aiApiKey: String(settings.aiApiKey || ''),
+		aiSystemPrompt: String(settings.aiSystemPrompt || ''),
+		aiTemperature: settings.aiTemperature === '' || settings.aiTemperature === undefined || settings.aiTemperature === null ? '' : String(settings.aiTemperature),
 	};
 }
 
@@ -133,3 +139,10 @@ function normalizeIconClass(iconClass) {
 	}
 	return iconClass;
 }
+
+function normalizeProvider(provider) {
+	provider = String(provider || '').trim().toLowerCase();
+	return ['openai', 'anthropic', 'gemini'].includes(provider) ? provider : 'openai';
+}
+
+plugin.normalizeProvider = normalizeProvider;

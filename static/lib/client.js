@@ -7,6 +7,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 		botUsername: '',
 		iconClass: 'fa-robot',
 		templates: [],
+		aiEnabled: false,
 		pending: null,
 	};
 
@@ -80,8 +81,9 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 		}
 
 		postData.replyAsBot = true;
-		state.pending = null;
 		postContainer.addClass('reply-as-bot-composer');
+		postContainer.attr('data-reply-as-bot-topid', state.pending.toPid || '');
+		state.pending = null;
 		addComposerControls(postContainer);
 	});
 
@@ -108,6 +110,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			state.botUsername = data.botUsername || '';
 			state.iconClass = data.iconClass || 'fa-robot';
 			state.templates = data.templates || [];
+			state.aiEnabled = !!data.aiEnabled;
 			callback();
 		});
 	}
@@ -168,6 +171,126 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			postContainer.find('.formatting-bar .formatting-group').append($(translatedMenu));
 			renderTemplateMenu(postContainer);
 		});
+
+		if (state.aiEnabled) {
+			translator.translate(`
+				<li component="reply-as-bot/ai-rewrite" title="[[reply-as-bot:ai.button-title]]">
+					<button type="button" class="btn btn-sm btn-link" aria-label="[[reply-as-bot:ai.button-title]]">
+						<i class="fa fa-magic"></i>
+						<span>[[reply-as-bot:ai.button]]</span>
+					</button>
+				</li>
+			`, function (translatedAi) {
+				const item = $(translatedAi);
+				postContainer.find('.formatting-bar .formatting-group').append(item);
+				item.find('button').on('click', function (event) {
+					event.preventDefault();
+					startAiRewrite(postContainer);
+				});
+			});
+		}
+	}
+
+	function startAiRewrite(postContainer) {
+		const textarea = postContainer.find('textarea.write')[0];
+		if (!textarea) {
+			return;
+		}
+		const original = textarea.value || '';
+		if (!original.trim()) {
+			alerts.alert({ type: 'warning', message: '[[reply-as-bot:error.ai-empty-text]]', timeout: 3000 });
+			return;
+		}
+		const toPid = postContainer.attr('data-reply-as-bot-topid') || '';
+		requestRewrite({ text: original, instruction: '', toPid }, function (rewritten) {
+			openAiReviewDialog(textarea, original, rewritten, toPid);
+		});
+	}
+
+	function requestRewrite(payload, callback) {
+		const alertId = 'reply-as-bot-ai-loading';
+		alerts.alert({
+			alert_id: alertId,
+			type: 'info',
+			message: '[[reply-as-bot:ai.working]]',
+			timeout: 0,
+		});
+		socket.emit('plugins.replyAsBot.aiRewrite', payload, function (err, result) {
+			alerts.remove(alertId);
+			if (err) {
+				return alerts.error(err);
+			}
+			callback((result && result.text) || '');
+		});
+	}
+
+	function openAiReviewDialog(textarea, original, rewritten, toPid) {
+		const dialog = bootbox.dialog({
+			title: '[[reply-as-bot:ai.review-title]]',
+			size: 'large',
+			message: `
+				<div class="mb-3">
+					<label class="form-label">[[reply-as-bot:ai.rewritten-label]]</label>
+					<textarea class="form-control" rows="10" component="reply-as-bot/ai-rewritten">${escapeHtml(rewritten)}</textarea>
+					<p class="form-text">[[reply-as-bot:ai.rewritten-help]]</p>
+				</div>
+				<div class="mb-3">
+					<label class="form-label">[[reply-as-bot:ai.instruction-label]]</label>
+					<textarea class="form-control" rows="2" component="reply-as-bot/ai-instruction" placeholder="[[reply-as-bot:ai.instruction-placeholder]]"></textarea>
+				</div>
+			`,
+			buttons: {
+				cancel: {
+					label: '[[modules:bootbox.cancel]]',
+				},
+				redo: {
+					label: '[[reply-as-bot:ai.redo]]',
+					className: 'btn-secondary',
+					callback: function () {
+						const modal = $(this);
+						const instruction = modal.find('[component="reply-as-bot/ai-instruction"]').val();
+						requestRewrite({ text: original, instruction, toPid }, function (newRewritten) {
+							modal.find('[component="reply-as-bot/ai-rewritten"]').val(newRewritten);
+							modal.find('[component="reply-as-bot/ai-instruction"]').val('');
+						});
+						return false;
+					},
+				},
+				apply: {
+					label: '[[reply-as-bot:ai.apply]]',
+					className: 'btn-primary',
+					callback: function () {
+						const modal = $(this);
+						const finalText = modal.find('[component="reply-as-bot/ai-rewritten"]').val();
+						applyRewrittenText(textarea, original, finalText);
+					},
+				},
+			},
+		});
+		return dialog;
+	}
+
+	function applyRewrittenText(textarea, original, rewritten) {
+		const quotedBlock = extractQuotedLines(original);
+		const finalValue = quotedBlock ? `${quotedBlock}\n\n${rewritten}` : rewritten;
+		textarea.value = finalValue;
+		$(textarea).trigger('change').trigger('input').focus();
+	}
+
+	function extractQuotedLines(text) {
+		const lines = String(text || '').split(/\r?\n/);
+		const quoted = [];
+		for (let i = 0; i < lines.length; i++) {
+			if (/^\s*>\s/.test(lines[i]) || (quoted.length && lines[i].trim() === '')) {
+				quoted.push(lines[i]);
+			} else if (quoted.length) {
+				break;
+			}
+		}
+		while (quoted.length && quoted[quoted.length - 1].trim() === '') {
+			quoted.pop();
+		}
+		return quoted.join('\n');
 	}
 
 	function renderTemplateMenu(postContainer) {

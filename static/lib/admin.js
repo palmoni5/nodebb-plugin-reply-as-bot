@@ -3,6 +3,8 @@
 define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect', 'translator'], function (alerts, autocomplete, iconSelect, translator) {
 	const ACP = {};
 
+	let clearKeyRequested = false;
+
 	ACP.init = function () {
 		const form = $('.reply-as-bot-settings');
 		loadTemplates();
@@ -22,15 +24,43 @@ define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect', 't
 			});
 		});
 
+		form.on('click', '[component="reply-as-bot/clear-key"]', function () {
+			clearKeyRequested = true;
+			$('#aiApiKey').val('').attr('placeholder', '[[reply-as-bot:admin.ai.api-key-placeholder]]');
+			translator.translate('[[reply-as-bot:admin.ai.api-key-cleared]]', function (translated) {
+				alerts.alert({ type: 'info', message: translated, timeout: 3000 });
+			});
+		});
+
+		form.on('click', '[component="reply-as-bot/reset-prompt"]', function () {
+			const textarea = $('#aiSystemPrompt');
+			textarea.val(textarea.attr('data-default') || '');
+		});
+
+		form.on('click', '[component="reply-as-bot/reset-temperature"]', function () {
+			const input = $('#aiTemperature');
+			input.val(input.attr('data-default') || '');
+		});
+
 		$('#save').on('click', function () {
-			socket.emit('plugins.replyAsBot.saveSettings', {
+			const payload = {
 				botUsername: form.find('[name="botUsername"]').val(),
 				allowedGroups: form.find('[name="allowedGroups"]').val() || [],
 				iconClass: form.find('[name="iconClass"]').val(),
-			}, function (err) {
+				aiEnabled: form.find('[name="aiEnabled"]').is(':checked'),
+				aiProvider: form.find('[name="aiProvider"]').val(),
+				aiModel: form.find('[name="aiModel"]').val(),
+				aiApiKey: clearKeyRequested ? '__CLEAR__' : (form.find('[name="aiApiKey"]').val() || ''),
+				aiSystemPrompt: form.find('[name="aiSystemPrompt"]').val() || '',
+				aiTemperature: form.find('[name="aiTemperature"]').val() || '',
+			};
+
+			socket.emit('plugins.replyAsBot.saveSettings', payload, function (err) {
 				if (err) {
 					return alerts.error(err);
 				}
+				clearKeyRequested = false;
+				$('#aiApiKey').val('');
 				alerts.success('[[global:saved]]');
 			});
 		});

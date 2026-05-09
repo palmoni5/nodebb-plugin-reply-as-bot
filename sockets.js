@@ -4,8 +4,10 @@ const db = require.main.require('./src/database');
 const meta = require.main.require('./src/meta');
 const user = require.main.require('./src/user');
 const groups = require.main.require('./src/groups');
+const posts = require.main.require('./src/posts');
 
 const library = require('./library');
+const ai = require('./ai');
 
 const TEMPLATE_SET = 'reply-as-bot:templates';
 const TEMPLATE_KEY = 'reply-as-bot:template:';
@@ -16,14 +18,27 @@ sockets.getState = async function (socket) {
 	const settings = await library.getSettings();
 	const botUid = await library.getBotUid(settings.botUsername);
 	const canUse = await library.canUse(socket.uid, settings.allowedGroups);
+	const isAdmin = await user.isAdministrator(socket.uid);
 
-	return {
+	const state = {
 		canUse,
 		botUsername: settings.botUsername,
 		botUid,
 		iconClass: settings.iconClass,
 		templates: await getTemplates(),
+		aiEnabled: settings.aiEnabled && !!settings.aiApiKey && !!settings.aiProvider,
 	};
+
+	if (isAdmin) {
+		state.admin = {
+			aiEnabled: settings.aiEnabled,
+			aiProvider: settings.aiProvider,
+			aiModel: settings.aiModel,
+			aiKeyConfigured: !!settings.aiApiKey,
+		};
+	}
+
+	return state;
 };
 
 sockets.saveSettings = async function (socket, data) {
@@ -45,16 +60,59 @@ sockets.saveSettings = async function (socket, data) {
 		throw new Error('[[reply-as-bot:error.select-allowed-group]]');
 	}
 
+	const aiEnabled = !!(data && data.aiEnabled);
+	const aiProvider = library.normalizeProvider(data && data.aiProvider);
+	const aiModel = String(data && data.aiModel || '').trim();
+
+	const current = await library.getSettings();
+	let aiApiKey = current.aiApiKey || '';
+	const incomingKey = data && typeof data.aiApiKey === 'string' ? data.aiApiKey : '';
+	if (incomingKey === '__CLEAR__') {
+		aiApiKey = '';
+	} else if (incomingKey.trim()) {
+		aiApiKey = incomingKey.trim();
+	}
+
+	if (aiEnabled && !aiApiKey) {
+		throw new Error('[[reply-as-bot:error.ai-key-required]]');
+	}
+
+	const incomingPrompt = String(data && data.aiSystemPrompt || '').trim();
+	const ai = require('./ai');
+	const aiSystemPrompt = !incomingPrompt || incomingPrompt === ai.DEFAULT_SYSTEM_PROMPT.trim() ? '' : incomingPrompt;
+
+	const incomingTemp = data && data.aiTemperature !== undefined && data.aiTemperature !== null ? String(data.aiTemperature).trim() : '';
+	let aiTemperature = '';
+	if (incomingTemp !== '') {
+		const tempNum = Number(incomingTemp);
+		if (!Number.isFinite(tempNum) || tempNum < 0 || tempNum > 2) {
+			throw new Error('[[reply-as-bot:error.ai-invalid-temperature]]');
+		}
+		if (tempNum !== ai.DEFAULT_TEMPERATURE) {
+			aiTemperature = String(tempNum);
+		}
+	}
+
 	await meta.settings.set('reply-as-bot', {
 		botUsername,
 		allowedGroups: validGroups,
 		iconClass,
+		aiEnabled,
+		aiProvider,
+		aiModel,
+		aiApiKey,
+		aiSystemPrompt,
+		aiTemperature,
 	});
 
 	return {
 		botUsername,
 		allowedGroups: validGroups,
 		iconClass,
+		aiEnabled,
+		aiProvider,
+		aiModel,
+		aiKeyConfigured: !!aiApiKey,
 	};
 };
 
@@ -92,6 +150,75 @@ sockets.deleteTemplate = async function (socket, data) {
 	await db.sortedSetRemove(TEMPLATE_SET, id);
 	await db.delete(`${TEMPLATE_KEY}${id}`);
 };
+
+sockets.aiRewrite = async function (socket, data) {
+	await assertCanUse(socket.uid);
+
+	const settings = await library.getSettings();
+	if (!settings.aiEnabled || !settings.aiApiKey || !settings.aiProvider) {
+		throw new Error('[[reply-as-bot:error.ai-not-configured]]');
+	}
+
+	const text = String(data && data.text || '');
+	const { quote, body } = splitQuoteAndBody(text);
+	if (!body.trim()) {
+		throw new Error('[[reply-as-bot:error.ai-empty-text]]');
+	}
+
+	const extraInstruction = String(data && data.instruction || '').trim();
+	const parentPost = await loadParentPost(parseInt(data && data.toPid, 10));
+
+	const rewritten = await ai.rewrite({
+		provider: settings.aiProvider,
+		apiKey: settings.aiApiKey,
+		model: settings.aiModel,
+		text: body,
+		extraInstruction,
+		systemPrompt: settings.aiSystemPrompt,
+		temperature: settings.aiTemperature,
+		quotedContext: quote,
+		parentPost,
+	});
+
+	return { text: rewritten };
+};
+
+function splitQuoteAndBody(text) {
+	const lines = String(text || '').split(/\r?\n/);
+	const quoteLines = [];
+	const bodyLines = [];
+	for (const line of lines) {
+		if (/^\s*>(\s|$)/.test(line)) {
+			quoteLines.push(line);
+		} else {
+			bodyLines.push(line);
+		}
+	}
+	return {
+		quote: quoteLines.join('\n').trim(),
+		body: bodyLines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+	};
+}
+
+async function loadParentPost(pid) {
+	if (!pid || !Number.isFinite(pid)) {
+		return null;
+	}
+	try {
+		const fields = await posts.getPostFields(pid, ['content', 'uid', 'deleted']);
+		if (!fields || !fields.content || parseInt(fields.deleted, 10) === 1) {
+			return null;
+		}
+		let username = '';
+		if (fields.uid) {
+			const u = await user.getUserFields(fields.uid, ['username']);
+			username = (u && u.username) || '';
+		}
+		return { content: String(fields.content), username };
+	} catch (err) {
+		return null;
+	}
+}
 
 async function assertCanUse(uid) {
 	const settings = await library.getSettings();
