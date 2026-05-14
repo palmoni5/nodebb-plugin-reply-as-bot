@@ -8,6 +8,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 		iconClass: 'fa-robot',
 		templates: [],
 		aiEnabled: false,
+		aiOnlyMode: false,
 		pending: null,
 	};
 
@@ -48,6 +49,11 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			tid: ajaxify.data.tid,
 			toPid: toPid,
 		};
+
+		if (state.aiOnlyMode && state.aiEnabled) {
+			openAiOnlyDialog(toPid, username);
+			return;
+		}
 
 		if (selectedNode.text && isQuoteToPid) {
 			hooks.fire('action:composer.addQuote', {
@@ -111,6 +117,7 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			state.iconClass = data.iconClass || 'fa-robot';
 			state.templates = data.templates || [];
 			state.aiEnabled = !!data.aiEnabled;
+			state.aiOnlyMode = !!data.aiOnlyMode;
 			callback();
 		});
 	}
@@ -268,6 +275,123 @@ require(['hooks', 'alerts', 'bootbox', 'translator'], function (hooks, alerts, b
 			},
 		});
 		return dialog;
+	}
+
+	function openAiOnlyDialog(toPid, username) {
+		const templateOptions = (state.templates || []).map(t =>
+			`<option value="${escapeAttr(t.id)}">${escapeHtml(t.title)}</option>`
+		).join('');
+		const templateSelect = templateOptions ? `
+			<div class="mb-2">
+				<select class="form-select form-select-sm" component="reply-as-bot/ai-only-template-select">
+					<option value="">[[reply-as-bot:templates.load-from]]</option>
+					${templateOptions}
+				</select>
+			</div>
+		` : '';
+
+		const dialog = bootbox.dialog({
+			title: '[[reply-as-bot:ai.only-dialog-title]]',
+			message: `
+				<div class="mb-3">
+					<label class="form-label fw-semibold">[[reply-as-bot:ai.only-instruction-label]]</label>
+					${templateSelect}
+					<textarea class="form-control" rows="4" component="reply-as-bot/ai-only-instruction" placeholder="[[reply-as-bot:ai.only-instruction-placeholder]]" autofocus></textarea>
+				</div>
+			`,
+			buttons: {
+				cancel: {
+					label: '[[modules:bootbox.cancel]]',
+					callback: function () {
+						state.pending = null;
+					},
+				},
+				generate: {
+					label: '[[reply-as-bot:ai.only-generate]]',
+					className: 'btn-primary',
+					callback: function () {
+						const modal = $(this);
+						const instruction = modal.find('[component="reply-as-bot/ai-only-instruction"]').val().trim();
+						if (!instruction) {
+							alerts.alert({ type: 'warning', message: '[[reply-as-bot:error.ai-only-instruction-required]]', timeout: 3000 });
+							return false;
+						}
+						requestRewrite({ text: '', instruction, toPid }, function (generated) {
+							openAiOnlyReviewDialog(generated, toPid, username, instruction);
+						});
+					},
+				},
+			},
+		});
+
+		dialog.on('change', '[component="reply-as-bot/ai-only-template-select"]', function () {
+			const id = $(this).val();
+			$(this).val('');
+			const template = findTemplate(id);
+			if (template) {
+				dialog.find('[component="reply-as-bot/ai-only-instruction"]').val(template.text).trigger('input').focus();
+			}
+		});
+	}
+
+	function openAiOnlyReviewDialog(generated, toPid, username, originalInstruction) {
+		bootbox.dialog({
+			title: '[[reply-as-bot:ai.only-review-title]]',
+			size: 'large',
+			message: `
+				<div class="mb-3">
+					<label class="form-label">[[reply-as-bot:ai.rewritten-label]]</label>
+					<textarea class="form-control" rows="10" component="reply-as-bot/ai-only-text">${escapeHtml(generated)}</textarea>
+					<p class="form-text">[[reply-as-bot:ai.rewritten-help]]</p>
+				</div>
+				<div class="mb-3">
+					<label class="form-label">[[reply-as-bot:ai.instruction-label]]</label>
+					<textarea class="form-control" rows="2" component="reply-as-bot/ai-only-redo-instruction" placeholder="[[reply-as-bot:ai.instruction-placeholder]]"></textarea>
+				</div>
+			`,
+			buttons: {
+				cancel: {
+					label: '[[modules:bootbox.cancel]]',
+					callback: function () {
+						state.pending = null;
+					},
+				},
+				redo: {
+					label: '[[reply-as-bot:ai.redo]]',
+					className: 'btn-secondary',
+					callback: function () {
+						const modal = $(this);
+						const currentText = modal.find('[component="reply-as-bot/ai-only-text"]').val();
+						const instruction = modal.find('[component="reply-as-bot/ai-only-redo-instruction"]').val().trim() || originalInstruction;
+						requestRewrite({ text: currentText, instruction, toPid }, function (newGenerated) {
+							modal.find('[component="reply-as-bot/ai-only-text"]').val(newGenerated);
+							modal.find('[component="reply-as-bot/ai-only-redo-instruction"]').val('');
+						});
+						return false;
+					},
+				},
+				apply: {
+					label: '[[reply-as-bot:ai.apply]]',
+					className: 'btn-primary',
+					callback: function () {
+						const modal = $(this);
+						const finalText = modal.find('[component="reply-as-bot/ai-only-text"]').val();
+						openComposerWithText(finalText, toPid, username);
+					},
+				},
+			},
+		});
+	}
+
+	function openComposerWithText(text, toPid, username) {
+		require(['composer'], function (composer) {
+			composer.newReply({
+				tid: ajaxify.data.tid,
+				toPid: toPid,
+				title: ajaxify.data.titleRaw,
+				body: text || (username ? `${username} ` : ''),
+			});
+		});
 	}
 
 	function applyRewrittenText(textarea, original, rewritten) {

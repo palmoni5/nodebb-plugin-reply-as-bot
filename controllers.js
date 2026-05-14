@@ -28,6 +28,7 @@ Controllers.renderAdminPage = async function (req, res) {
 			selected: selected.includes(group.name) || selected.includes(group.displayName),
 		})),
 		aiEnabled: settings.aiEnabled === true || settings.aiEnabled === 'true' || settings.aiEnabled === 'on',
+		aiOnlyMode: settings.aiOnlyMode === true || settings.aiOnlyMode === 'true' || settings.aiOnlyMode === 'on',
 		aiProvider,
 		aiModel: String(settings.aiModel || ''),
 		aiKeyConfigured: !!settings.aiApiKey,

@@ -20,13 +20,15 @@ sockets.getState = async function (socket) {
 	const canUse = await library.canUse(socket.uid, settings.allowedGroups);
 	const isAdmin = await user.isAdministrator(socket.uid);
 
+	const aiReady = settings.aiEnabled && !!settings.aiApiKey && !!settings.aiProvider;
 	const state = {
 		canUse,
 		botUsername: settings.botUsername,
 		botUid,
 		iconClass: settings.iconClass,
 		templates: await getTemplates(),
-		aiEnabled: settings.aiEnabled && !!settings.aiApiKey && !!settings.aiProvider,
+		aiEnabled: aiReady,
+		aiOnlyMode: aiReady && !!settings.aiOnlyMode,
 	};
 
 	if (isAdmin) {
@@ -61,6 +63,7 @@ sockets.saveSettings = async function (socket, data) {
 	}
 
 	const aiEnabled = !!(data && data.aiEnabled);
+	const aiOnlyMode = !!(data && data.aiOnlyMode);
 	const aiProvider = library.normalizeProvider(data && data.aiProvider);
 	const aiModel = String(data && data.aiModel || '').trim();
 
@@ -98,6 +101,7 @@ sockets.saveSettings = async function (socket, data) {
 		allowedGroups: validGroups,
 		iconClass,
 		aiEnabled,
+		aiOnlyMode,
 		aiProvider,
 		aiModel,
 		aiApiKey,
@@ -110,6 +114,7 @@ sockets.saveSettings = async function (socket, data) {
 		allowedGroups: validGroups,
 		iconClass,
 		aiEnabled,
+		aiOnlyMode,
 		aiProvider,
 		aiModel,
 		aiKeyConfigured: !!aiApiKey,
@@ -161,12 +166,13 @@ sockets.aiRewrite = async function (socket, data) {
 
 	const text = String(data && data.text || '');
 	const { quote, body } = splitQuoteAndBody(text);
-	if (!body.trim()) {
+	const extraInstruction = String(data && data.instruction || '').trim();
+
+	if (!body.trim() && !extraInstruction) {
 		throw new Error('[[reply-as-bot:error.ai-empty-text]]');
 	}
 
-	const extraInstruction = String(data && data.instruction || '').trim();
-	const parentPost = await loadParentPost(parseInt(data && data.toPid, 10));
+	const postsContext = await loadPostsContext(parseInt(data && data.toPid, 10));
 
 	const rewritten = await ai.rewrite({
 		provider: settings.aiProvider,
@@ -177,7 +183,7 @@ sockets.aiRewrite = async function (socket, data) {
 		systemPrompt: settings.aiSystemPrompt,
 		temperature: settings.aiTemperature,
 		quotedContext: quote,
-		parentPost,
+		postsContext,
 	});
 
 	return { text: rewritten };
@@ -200,23 +206,40 @@ function splitQuoteAndBody(text) {
 	};
 }
 
-async function loadParentPost(pid) {
+async function loadPostsContext(pid) {
 	if (!pid || !Number.isFinite(pid)) {
-		return null;
+		return [];
 	}
 	try {
-		const fields = await posts.getPostFields(pid, ['content', 'uid', 'deleted']);
-		if (!fields || !fields.content || parseInt(fields.deleted, 10) === 1) {
-			return null;
+		const parentFields = await posts.getPostFields(pid, ['content', 'uid', 'deleted', 'tid']);
+		if (!parentFields || !parentFields.content || parseInt(parentFields.deleted, 10) === 1) {
+			return [];
 		}
-		let username = '';
-		if (fields.uid) {
-			const u = await user.getUserFields(fields.uid, ['username']);
-			username = (u && u.username) || '';
-		}
-		return { content: String(fields.content), username };
+
+		const tid = parseInt(parentFields.tid, 10);
+		const allPids = await db.getSortedSetRange(`tid:${tid}:posts`, 0, -1);
+		const idx = allPids.indexOf(String(pid));
+		const prevPids = idx > 0 ? allPids.slice(Math.max(0, idx - 3), idx) : [];
+
+		const pidsToLoad = [...prevPids, String(pid)];
+		const postFieldsArr = await Promise.all(
+			pidsToLoad.map(p => posts.getPostFields(parseInt(p, 10), ['content', 'uid', 'deleted']))
+		);
+
+		const uids = postFieldsArr.map(p => p && p.uid).filter(Boolean);
+		const usersData = uids.length ? await user.getUsersFields(uids, ['uid', 'username']) : [];
+		const userMap = Object.fromEntries(usersData.map(u => [String(u.uid), u.username]));
+
+		return postFieldsArr
+			.map((p, i) => ({
+				content: String((p && p.content) || ''),
+				username: p ? (userMap[String(p.uid)] || '') : '',
+				isTarget: i === pidsToLoad.length - 1,
+				deleted: !p || parseInt(p.deleted, 10) === 1,
+			}))
+			.filter(p => !p.deleted && p.content);
 	} catch (err) {
-		return null;
+		return [];
 	}
 }
 

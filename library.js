@@ -96,6 +96,7 @@ async function getSettings() {
 		allowedGroups: parseGroups(settings.allowedGroups),
 		iconClass: normalizeIconClass(settings.iconClass),
 		aiEnabled: String(settings.aiEnabled) === 'true' || settings.aiEnabled === true || settings.aiEnabled === 'on',
+		aiOnlyMode: String(settings.aiOnlyMode) === 'true' || settings.aiOnlyMode === true || settings.aiOnlyMode === 'on',
 		aiProvider: normalizeProvider(settings.aiProvider),
 		aiModel: String(settings.aiModel || '').trim(),
 		aiApiKey: String(settings.aiApiKey || ''),

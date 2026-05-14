@@ -13,6 +13,16 @@ const DEFAULT_SYSTEM_PROMPT = [
 	'Output ONLY the rewritten reply and nothing else.',
 ].join('\n\n');
 
+const DEFAULT_SYSTEM_PROMPT_GENERATE = [
+	'You are an articulate writer composing a reply for a NodeBB forum thread. The forum uses Markdown — your output must be valid Markdown (bold, italics, lists, code blocks, links, @mentions, headings, etc., used naturally where appropriate).',
+	'Your job is to write a BRAND-NEW forum reply based on the thread context (if provided) and the author\'s instruction. You are composing on behalf of the author.',
+	'Match the LANGUAGE of the thread context (Hebrew → Hebrew, English → English, etc.).',
+	'Preserve verbatim: code blocks, inline code, URLs, @mentions, and any literal identifiers.',
+	'Do NOT add introductions, sign-offs, disclaimers, headers, or meta-commentary.',
+	'Do NOT wrap the output in quotes or in a markdown code fence.',
+	'Output ONLY the composed reply and nothing else.',
+].join('\n\n');
+
 const DEFAULT_MODELS = {
 	openai: 'gpt-4o-mini',
 	anthropic: 'claude-haiku-4-5-20251001',
@@ -24,14 +34,17 @@ const DEFAULT_TEMPERATURE = 1.0;
 const ai = module.exports;
 
 ai.DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT;
+ai.DEFAULT_SYSTEM_PROMPT_GENERATE = DEFAULT_SYSTEM_PROMPT_GENERATE;
 ai.DEFAULT_TEMPERATURE = DEFAULT_TEMPERATURE;
 ai.DEFAULT_MODELS = DEFAULT_MODELS;
 
-ai.rewrite = async function ({ provider, apiKey, model, text, extraInstruction, systemPrompt, temperature, quotedContext, parentPost }) {
+ai.rewrite = async function ({ provider, apiKey, model, text, extraInstruction, systemPrompt, temperature, quotedContext, postsContext }) {
 	const chosenModel = (model && model.trim()) || DEFAULT_MODELS[provider];
-	const chosenSystemPrompt = (systemPrompt && systemPrompt.trim()) || DEFAULT_SYSTEM_PROMPT;
+	const isGenerateMode = !text || !text.trim();
+	const chosenSystemPrompt = (systemPrompt && systemPrompt.trim()) ||
+		(isGenerateMode ? DEFAULT_SYSTEM_PROMPT_GENERATE : DEFAULT_SYSTEM_PROMPT);
 	const chosenTemperature = clampTemperature(temperature);
-	const userMessage = buildUserMessage({ text, extraInstruction, quotedContext, parentPost });
+	const userMessage = buildUserMessage({ text, extraInstruction, quotedContext, postsContext });
 
 	switch (provider) {
 		case 'openai':
@@ -53,19 +66,31 @@ function clampTemperature(value) {
 	return Math.max(0, Math.min(2, num));
 }
 
-function buildUserMessage({ text, extraInstruction, quotedContext, parentPost }) {
+function buildUserMessage({ text, extraInstruction, quotedContext, postsContext }) {
 	const parts = [];
 
-	if (parentPost && parentPost.content) {
-		parts.push(`CONTEXT (read-only, DO NOT rewrite or include in your output) — the author is replying to this earlier forum post${parentPost.username ? ` by @${parentPost.username}` : ''}:`);
-		parts.push('===PARENT POST START===');
-		parts.push(truncate(parentPost.content, 2000));
-		parts.push('===PARENT POST END===');
+	if (Array.isArray(postsContext) && postsContext.length) {
+		const prevPosts = postsContext.filter(p => !p.isTarget);
+		const targetPost = postsContext.find(p => p.isTarget);
+
+		parts.push('THREAD CONTEXT (read-only — recent posts from the forum thread shown oldest-first; the block marked ★ is the specific post being replied to. DO NOT echo, quote, or repeat any of these in your output. Use them only to understand the discussion.):');
 		parts.push('');
+
+		for (const p of prevPosts) {
+			parts.push(`[Post by @${p.username || 'unknown'}]`);
+			parts.push(truncate(p.content, 800));
+			parts.push('');
+		}
+
+		if (targetPost) {
+			parts.push(`[★ REPLYING TO THIS — by @${targetPost.username || 'unknown'}]`);
+			parts.push(truncate(targetPost.content, 1500));
+			parts.push('');
+		}
 	}
 
 	if (quotedContext && quotedContext.trim()) {
-		parts.push('CONTEXT (read-only, DO NOT rewrite or include in your output) — the author is specifically quoting this passage in their reply. Treat it as background that helps you understand what the draft is responding to:');
+		parts.push('QUOTED PASSAGE (the author is specifically referencing this — context only, do not include in output):');
 		parts.push('===QUOTE START===');
 		parts.push(quotedContext);
 		parts.push('===QUOTE END===');
@@ -73,14 +98,19 @@ function buildUserMessage({ text, extraInstruction, quotedContext, parentPost })
 	}
 
 	if (extraInstruction) {
-		parts.push(`Extra instruction from the author (apply it, but still keep the original intent and stance intact): ${extraInstruction}`);
+		parts.push(`Author's instruction: ${extraInstruction}`);
 		parts.push('');
 	}
 
-	parts.push('Below is the actual DRAFT MESSAGE you must rewrite. Use the context above (if any) only to understand what the author is responding to — do not echo, paraphrase or include the parent post or the quote in your output. Compose a brand-new forum reply in your own voice that conveys the same intent, claims and facts as this draft — using YOUR own tone, structure, punctuation and phrasing, not the author\'s. Match the input\'s language. Output only the new reply, in Markdown:');
-	parts.push('===DRAFT START===');
-	parts.push(text);
-	parts.push('===DRAFT END===');
+	if (text && text.trim()) {
+		parts.push('Below is the DRAFT MESSAGE to rewrite. Convey the same intent, claims and facts in your own voice — different tone, structure and phrasing. Match the draft\'s language. Output only the new reply in Markdown:');
+		parts.push('===DRAFT START===');
+		parts.push(text);
+		parts.push('===DRAFT END===');
+	} else {
+		parts.push('No draft provided. Based on the thread context and the author\'s instruction above, compose a brand-new forum reply. Output only the reply in Markdown:');
+	}
+
 	return parts.join('\n');
 }
 

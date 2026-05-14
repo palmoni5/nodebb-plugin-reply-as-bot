@@ -41,6 +41,12 @@
 							<p class="form-text mb-0">[[reply-as-bot:admin.ai.enable-help]]</p>
 						</div>
 
+						<div component="reply-as-bot/ai-only-mode-row" class="form-check form-switch mb-3">
+							<input id="aiOnlyMode" class="form-check-input" type="checkbox" name="aiOnlyMode"{{{ if aiOnlyMode }}} checked{{{ end }}}>
+							<label class="form-check-label" for="aiOnlyMode">[[reply-as-bot:admin.ai.ai-only-mode]]</label>
+							<p class="form-text mb-0">[[reply-as-bot:admin.ai.ai-only-mode-help]]</p>
+						</div>
+
 						<div class="mb-3">
 							<label class="form-label" for="aiProvider">[[reply-as-bot:admin.ai.provider]]</label>
 							<select id="aiProvider" class="form-select" name="aiProvider">

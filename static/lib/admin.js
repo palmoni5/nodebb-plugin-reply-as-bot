@@ -42,12 +42,21 @@ define('admin/plugins/reply-as-bot', ['alerts', 'autocomplete', 'iconSelect', 't
 			input.val(input.attr('data-default') || '');
 		});
 
+		$('#aiEnabled').on('change', function () {
+			const enabled = $(this).is(':checked');
+			$('[component="reply-as-bot/ai-only-mode-row"]').toggle(enabled);
+			if (!enabled) {
+				$('[name="aiOnlyMode"]').prop('checked', false);
+			}
+		}).trigger('change');
+
 		$('#save').on('click', function () {
 			const payload = {
 				botUsername: form.find('[name="botUsername"]').val(),
 				allowedGroups: form.find('[name="allowedGroups"]').val() || [],
 				iconClass: form.find('[name="iconClass"]').val(),
 				aiEnabled: form.find('[name="aiEnabled"]').is(':checked'),
+				aiOnlyMode: form.find('[name="aiOnlyMode"]').is(':checked'),
 				aiProvider: form.find('[name="aiProvider"]').val(),
 				aiModel: form.find('[name="aiModel"]').val(),
 				aiApiKey: clearKeyRequested ? '__CLEAR__' : (form.find('[name="aiApiKey"]').val() || ''),
