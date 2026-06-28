@@ -50,7 +50,7 @@ sockets.saveSettings = async function (socket, data) {
 
 	const botUsername = String(data && data.botUsername || '').trim();
 	const allowedGroups = Array.isArray(data && data.allowedGroups) ? data.allowedGroups.map(String) : [];
-	const iconClass = normalizeIconClass(data && data.iconClass);
+	const iconClass = library.normalizeIconClass(data && data.iconClass);
 	const botUid = await library.getBotUid(botUsername);
 	if (!botUid) {
 		throw new Error('[[reply-as-bot:error.select-valid-bot-user]]');
@@ -265,15 +265,4 @@ async function getTemplates() {
 		...template,
 		username: userMap[String(template.uid)] || '',
 	}));
-}
-
-function normalizeIconClass(iconClass) {
-	iconClass = String(iconClass || '').trim();
-	if (
-		!/^(fa-[a-z0-9-]+)(\s+(fa|fas|far|fab|fa-solid|fa-regular|fa-brands))*$/i.test(iconClass) ||
-		iconClass.includes('fa-nbb-none')
-	) {
-		return 'fa-robot';
-	}
-	return iconClass;
 }

@@ -4,6 +4,7 @@ const meta = require.main.require('./src/meta');
 const groups = require.main.require('./src/groups');
 
 const ai = require('./ai');
+const library = require('./library');
 
 const Controllers = module.exports;
 
@@ -12,8 +13,8 @@ Controllers.renderAdminPage = async function (req, res) {
 		meta.settings.get('reply-as-bot'),
 		groups.getNonPrivilegeGroups('groups:createtime', 0, -1),
 	]);
-	const selected = parseGroups(settings.allowedGroups);
-	const aiProvider = normalizeProvider(settings.aiProvider);
+	const selected = library.parseGroups(settings.allowedGroups);
+	const aiProvider = library.normalizeProvider(settings.aiProvider);
 	const aiSystemPrompt = String(settings.aiSystemPrompt || '');
 	const aiTemperatureRaw = settings.aiTemperature;
 	const aiTemperature = aiTemperatureRaw === '' || aiTemperatureRaw === undefined || aiTemperatureRaw === null ? '' : String(aiTemperatureRaw);
@@ -21,7 +22,7 @@ Controllers.renderAdminPage = async function (req, res) {
 	res.render('admin/plugins/reply-as-bot', {
 		title: '[[reply-as-bot:admin.title]]',
 		botUsername: settings.botUsername || '',
-		iconClass: normalizeIconClass(settings.iconClass),
+		iconClass: library.normalizeIconClass(settings.iconClass),
 		groups: groupData.map(group => ({
 			name: group.name,
 			displayName: group.displayName,
@@ -43,29 +44,3 @@ Controllers.renderAdminPage = async function (req, res) {
 		],
 	});
 };
-
-function parseGroups(value) {
-	if (Array.isArray(value)) {
-		return value.map(String);
-	}
-	return String(value || '')
-		.split(/[\n,]/)
-		.map(group => group.trim())
-		.filter(Boolean);
-}
-
-function normalizeIconClass(iconClass) {
-	iconClass = String(iconClass || '').trim();
-	if (
-		!/^(fa-[a-z0-9-]+)(\s+(fa|fas|far|fab|fa-solid|fa-regular|fa-brands))*$/i.test(iconClass) ||
-		iconClass.includes('fa-nbb-none')
-	) {
-		return 'fa-robot';
-	}
-	return iconClass;
-}
-
-function normalizeProvider(provider) {
-	provider = String(provider || '').trim().toLowerCase();
-	return ['openai', 'anthropic', 'gemini'].includes(provider) ? provider : 'openai';
-}

@@ -146,4 +146,6 @@ function normalizeProvider(provider) {
 	return ['openai', 'anthropic', 'gemini'].includes(provider) ? provider : 'openai';
 }
 
+plugin.parseGroups = parseGroups;
+plugin.normalizeIconClass = normalizeIconClass;
 plugin.normalizeProvider = normalizeProvider;
